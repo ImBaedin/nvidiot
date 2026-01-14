@@ -75,7 +75,7 @@ fn get_process_name(pid: u32) -> Option<String> {
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         let mut name_buffer = [0u16; 260];
-        let len = GetModuleBaseNameW(handle.0, None, &mut name_buffer);
+        let len = GetModuleBaseNameW(&handle, None, &mut name_buffer);
         if len > 0 {
             Some(String::from_utf16_lossy(&name_buffer[..len as usize]))
         } else {

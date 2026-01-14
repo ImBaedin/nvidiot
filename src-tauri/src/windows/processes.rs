@@ -13,6 +13,7 @@ use windows::{
     },
     Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT},
     Win32::System::ProcessStatus::GetModuleBaseNameW,
+    core::PWSTR,
 };
 
 #[cfg(target_os = "windows")]
@@ -96,7 +97,7 @@ fn get_process_info(pid: u32) -> Option<(String, Option<String>)> {
 
         // Get process name
         let mut name_buffer = [0u16; 260];
-        let name_len = GetModuleBaseNameW(handle.0, None, &mut name_buffer);
+        let name_len = GetModuleBaseNameW(&handle, None, &mut name_buffer);
         let process_name = if name_len > 0 {
             String::from_utf16_lossy(&name_buffer[..name_len as usize])
         } else {
@@ -106,7 +107,7 @@ fn get_process_info(pid: u32) -> Option<(String, Option<String>)> {
         // Get full path
         let mut path_buffer = [0u16; 1024];
         let mut path_len = path_buffer.len() as u32;
-        let executable_path = if QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), &mut path_buffer, &mut path_len).is_ok() {
+        let executable_path = if QueryFullProcessImageNameW(&handle, PROCESS_NAME_FORMAT(0), PWSTR(path_buffer.as_mut_ptr()), &mut path_len).is_ok() {
             Some(String::from_utf16_lossy(&path_buffer[..path_len as usize]))
         } else {
             None
