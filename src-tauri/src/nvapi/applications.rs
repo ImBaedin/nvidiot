@@ -89,6 +89,11 @@ pub fn get_all_applications() -> Result<Vec<DrsApplication>, NvApiError> {
     let mut all_apps = Vec::new();
 
     for profile in profiles {
+        // Only query profiles that have applications
+        if profile.application_count == 0 {
+            continue;
+        }
+
         if let Ok(profile_handle) = find_profile_by_name(&profile.name) {
             if let Ok(apps) = enumerate_applications(profile_handle, &profile.name) {
                 all_apps.extend(apps);
