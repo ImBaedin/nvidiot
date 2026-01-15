@@ -25,15 +25,21 @@ pub fn enumerate_applications(profile_handle: NvDRSProfileHandle, profile_name: 
 
     // Get profile info to know how many apps
     let mut profile_info = NvdrsProfile::default();
-    unsafe {
-        get_profile_info(session, profile_handle, &mut profile_info);
-    }
+    let num_apps = unsafe {
+        let status = get_profile_info(session, profile_handle, &mut profile_info);
+        if status != NVAPI_OK {
+            // If we can't get profile info, try enumerating anyway
+            u32::MAX
+        } else {
+            profile_info.num_of_apps
+        }
+    };
 
     let mut applications = Vec::new();
     let mut start_index: u32 = 0;
 
     unsafe {
-        while start_index < profile_info.num_of_apps {
+        while start_index < num_apps {
             // Enumerate in batches
             let mut apps: [NvdrsApplication; 32] = std::array::from_fn(|_| NvdrsApplication::default());
             let mut count: u32 = 32;

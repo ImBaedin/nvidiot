@@ -95,22 +95,25 @@ fn get_process_info(pid: u32) -> Option<(String, Option<String>)> {
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
 
-        // Get process name
-        let mut name_buffer = [0u16; 260];
-        let name_len = GetModuleBaseNameW(handle, None, &mut name_buffer);
-        let process_name = if name_len > 0 {
-            String::from_utf16_lossy(&name_buffer[..name_len as usize])
-        } else {
-            return None;
-        };
-
-        // Get full path
+        // Get full path first (more reliable)
         let mut path_buffer = [0u16; 1024];
         let mut path_len = path_buffer.len() as u32;
-        let executable_path = if QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), PWSTR(path_buffer.as_mut_ptr()), &mut path_len).is_ok() {
-            Some(String::from_utf16_lossy(&path_buffer[..path_len as usize]))
+        let (process_name, executable_path) = if QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), PWSTR(path_buffer.as_mut_ptr()), &mut path_len).is_ok() {
+            let full_path = String::from_utf16_lossy(&path_buffer[..path_len as usize]);
+            // Extract process name from path
+            let name = full_path.rsplit('\\').next()
+                .unwrap_or(&full_path)
+                .to_string();
+            (name, Some(full_path))
         } else {
-            None
+            // Fallback to GetModuleBaseNameW
+            let mut name_buffer = [0u16; 260];
+            let name_len = GetModuleBaseNameW(handle, None, &mut name_buffer);
+            if name_len > 0 {
+                (String::from_utf16_lossy(&name_buffer[..name_len as usize]), None)
+            } else {
+                return None;
+            }
         };
 
         Some((process_name, executable_path))
@@ -158,7 +161,7 @@ pub fn get_running_processes() -> Vec<RunningProcess> {
         .map(|info| {
             let (has_drs_profile, profile_name, is_blacklisted) = match find_application(&info.process_name) {
                 Ok((profile_handle, _app)) => {
-                    let profile_name = get_profile_name_for_app(&info.process_name);
+                    let profile_name = get_profile_name_from_handle(profile_handle);
                     let is_blacklisted = get_shadowplay_status(profile_handle).ok();
                     (true, profile_name, is_blacklisted)
                 }
@@ -184,23 +187,22 @@ pub fn get_running_processes() -> Vec<RunningProcess> {
 }
 
 #[cfg(target_os = "windows")]
-fn get_profile_name_for_app(executable: &str) -> Option<String> {
-    use crate::nvapi::profiles::enumerate_profiles;
-    use crate::nvapi::profiles::find_profile_by_name;
-    use crate::nvapi::applications::enumerate_applications;
+fn get_profile_name_from_handle(profile_handle: crate::nvapi::ffi::NvDRSProfileHandle) -> Option<String> {
+    use crate::nvapi::ffi::{get_nvapi, wchar_to_string, NvdrsProfile};
+    use crate::nvapi::session::get_session;
+    use crate::nvapi::error::NVAPI_OK;
 
-    if let Ok(profiles) = enumerate_profiles() {
-        for profile in profiles {
-            if let Ok(profile_handle) = find_profile_by_name(&profile.name) {
-                if let Ok(apps) = enumerate_applications(profile_handle, &profile.name) {
-                    for app in apps {
-                        if app.executable.to_lowercase() == executable.to_lowercase() {
-                            return Some(profile.name);
-                        }
-                    }
-                }
-            }
+    let api = get_nvapi().ok()?;
+    let session = get_session().ok()?;
+    let get_profile_info = api.drs_get_profile_info?;
+
+    unsafe {
+        let mut profile_info = NvdrsProfile::default();
+        let status = get_profile_info(session, profile_handle, &mut profile_info);
+        if status == NVAPI_OK {
+            Some(wchar_to_string(&profile_info.profile_name))
+        } else {
+            None
         }
     }
-    None
 }
