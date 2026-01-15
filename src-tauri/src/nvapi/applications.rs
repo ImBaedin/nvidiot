@@ -83,11 +83,13 @@ pub fn enumerate_applications(_profile_handle: NvDRSProfileHandle, _profile_name
 }
 
 /// Get all applications across all profiles
+/// This returns ALL profiles as searchable entries, plus any explicitly registered applications
 #[cfg(target_os = "windows")]
 pub fn get_all_applications() -> Result<Vec<DrsApplication>, NvApiError> {
-    use super::ffi::{get_nvapi, NvdrsProfile};
+    use super::ffi::{get_nvapi, NvdrsProfile, wchar_to_string};
     use super::session::get_session;
     use super::error::NVAPI_OK;
+    use super::settings::get_shadowplay_status;
 
     let api = get_nvapi()?;
     let session = get_session()?;
@@ -113,14 +115,30 @@ pub fn get_all_applications() -> Result<Vec<DrsApplication>, NvApiError> {
                 continue;
             }
 
-            // Get profile info for the name
+            // Get profile info
             let mut profile_info = NvdrsProfile::default();
             let status = get_profile_info(session, profile_handle, &mut profile_info);
 
-            if status == NVAPI_OK && profile_info.num_of_apps > 0 {
-                let profile_name = super::ffi::wchar_to_string(&profile_info.profile_name);
-                if let Ok(apps) = enumerate_applications(profile_handle, &profile_name) {
-                    all_apps.extend(apps);
+            if status == NVAPI_OK {
+                let profile_name = wchar_to_string(&profile_info.profile_name);
+                let is_predefined = profile_info.is_predefined != 0;
+                let is_blacklisted = get_shadowplay_status(profile_handle).unwrap_or(false);
+
+                if profile_info.num_of_apps > 0 {
+                    // Profile has registered applications - enumerate them
+                    if let Ok(apps) = enumerate_applications(profile_handle, &profile_name) {
+                        all_apps.extend(apps);
+                    }
+                } else {
+                    // Profile has no registered apps - add the profile itself as an entry
+                    // Use profile name as both name and executable (common pattern for game profiles)
+                    all_apps.push(DrsApplication {
+                        name: profile_name.clone(),
+                        executable: profile_name.clone(),
+                        profile_name: profile_name,
+                        is_predefined,
+                        is_blacklisted,
+                    });
                 }
             }
 

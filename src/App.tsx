@@ -46,6 +46,12 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
 
   // Check NVAPI status on mount
   useEffect(() => {
@@ -157,10 +163,12 @@ function App() {
     try {
       const profileName = executable.replace(/\.exe$/i, "");
       await createProfile(executable, profileName);
+      showToast(`Created profile for ${executable}`, "success");
       // Reload data to reflect changes
       await Promise.all([loadRunningProcesses(), loadDrsApplications()]);
     } catch (e) {
       console.error("Failed to create profile:", e);
+      showToast(`Failed to create profile: ${e}`, "error");
     } finally {
       setPendingActions(prev => {
         const next = new Set(prev);
@@ -168,7 +176,7 @@ function App() {
         return next;
       });
     }
-  }, []);
+  }, [showToast]);
 
   const getInitials = (name: string) => {
     return name.slice(0, 2).toUpperCase();
@@ -399,6 +407,13 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`toast ${toast.type}`}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
