@@ -47,3 +47,20 @@ jobs:
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/*.exe
           if-no-files-found: error
+
+      - name: Build Tauri app (Debug)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --target x86_64-pc-windows-msvc --debug
+
+      - name: Upload debug artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nvidiot-windows-debug
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/debug/bundle/msi/*.msi
+            src-tauri/target/x86_64-pc-windows-msvc/debug/bundle/nsis/*.exe
+            src-tauri/target/x86_64-pc-windows-msvc/debug/*.exe
+          if-no-files-found: error
