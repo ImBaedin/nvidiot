@@ -7,13 +7,13 @@ use std::collections::HashMap;
 
 #[cfg(target_os = "windows")]
 use windows::{
-    Win32::Foundation::{BOOL, HWND, LPARAM},
+    core::{BOOL, PWSTR},
+    Win32::Foundation::{HWND, LPARAM},
     Win32::UI::WindowsAndMessaging::{
         EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
     },
     Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT},
     Win32::System::ProcessStatus::GetModuleBaseNameW,
-    core::PWSTR,
 };
 
 #[cfg(target_os = "windows")]
