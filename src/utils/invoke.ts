@@ -28,7 +28,7 @@ export async function createProfile(
   executable: string,
   profileName: string
 ): Promise<void> {
-  return invoke("create_profile", { executable, profile_name: profileName });
+  return invoke("create_profile", { executable, profileName });
 }
 
 export async function blacklistApplication(
