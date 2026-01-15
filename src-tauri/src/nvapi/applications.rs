@@ -85,19 +85,46 @@ pub fn enumerate_applications(_profile_handle: NvDRSProfileHandle, _profile_name
 /// Get all applications across all profiles
 #[cfg(target_os = "windows")]
 pub fn get_all_applications() -> Result<Vec<DrsApplication>, NvApiError> {
-    let profiles = enumerate_profiles()?;
+    use super::ffi::{get_nvapi, NvdrsProfile};
+    use super::session::get_session;
+    use super::error::NVAPI_OK;
+
+    let api = get_nvapi()?;
+    let session = get_session()?;
+
+    let enum_profiles = api.drs_enum_profiles
+        .ok_or_else(|| NvApiError::FunctionNotFound("NvAPI_DRS_EnumProfiles".to_string()))?;
+    let get_profile_info = api.drs_get_profile_info
+        .ok_or_else(|| NvApiError::FunctionNotFound("NvAPI_DRS_GetProfileInfo".to_string()))?;
+
     let mut all_apps = Vec::new();
+    let mut index: u32 = 0;
 
-    for profile in profiles {
-        // Only query profiles that have applications
-        if profile.application_count == 0 {
-            continue;
-        }
+    unsafe {
+        loop {
+            let mut profile_handle: super::ffi::NvDRSProfileHandle = std::ptr::null_mut();
+            let status = enum_profiles(session, index, &mut profile_handle);
 
-        if let Ok(profile_handle) = find_profile_by_name(&profile.name) {
-            if let Ok(apps) = enumerate_applications(profile_handle, &profile.name) {
-                all_apps.extend(apps);
+            if status == super::error::NVAPI_END_ENUMERATION {
+                break;
             }
+            if status != NVAPI_OK {
+                index += 1;
+                continue;
+            }
+
+            // Get profile info for the name
+            let mut profile_info = NvdrsProfile::default();
+            let status = get_profile_info(session, profile_handle, &mut profile_info);
+
+            if status == NVAPI_OK && profile_info.num_of_apps > 0 {
+                let profile_name = super::ffi::wchar_to_string(&profile_info.profile_name);
+                if let Ok(apps) = enumerate_applications(profile_handle, &profile_name) {
+                    all_apps.extend(apps);
+                }
+            }
+
+            index += 1;
         }
     }
 
